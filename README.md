@@ -132,19 +132,19 @@ What this shows, and what it does not:
   answer unchanged), which is why `flag_recall` and `right_wrong_reason` are first-class metrics.
 - These are scripted agents with hand-set thresholds, not evidence about LLMs.
 
-## Roadmap (build phase by phase; each phase has an exit test)
+## Roadmap 
 
 | Phase | Deliverable | Exit criterion |
 |---|---|---|
-| **0 (done)** | Skeleton, schema, grader, leakage generator, baselines, tests | Oracle=100%, naive fooled, always-flag 100% false alarms |
-| **1 (done)** | 3 leakage mechanisms x 3 difficulties, calibrated ground truth, grader mutation + invariance tests, runner robustness tests | All 9 cells solved by `heuristic_careful`; clean twins verified exact; ladder separates `sanity_check` (recall 1.00 / 0.17 / 0.00) |
+| **0** | Skeleton, schema, grader, leakage generator, baselines, tests | Oracle=100%, naive fooled, always-flag 100% false alarms |
+| **1** | 3 leakage mechanisms x 3 difficulties, calibrated ground truth, grader mutation + invariance tests, runner robustness tests | All 9 cells solved by `heuristic_careful`; clean twins verified exact; ladder separates `sanity_check` (recall 1.00 / 0.17 / 0.00) |
 | **2** | `survivorship.py` and `multiple_testing.py` (design sketches in the files) | Same validation battery passes for each new family |
 | **3** | LLM agent harness: sandboxed Python tool, transcript capture, prompt conditions (`none` / `generic_hint` / `checklist`), k repeated runs | Pipeline reproduces baseline numbers for a scripted agent; transcripts stored |
 | **4** | Pre-registered experiments: freeze hypotheses, run N seeds x conditions x models, CIs | Analysis script regenerates every number in the report |
 | **5** | Failure taxonomy from transcripts, one-page report, reproducibility check from a fresh clone | Someone else reproduces the headline table |
 | Stretch | Overfitting, confounding, regime shift families | Only if Phases 0-5 are done |
 
-## Known limitations (state these in any write-up)
+## Known limitations
 
 - Synthetic data: agents may recognise toy structure, and real traps are messier. Mitigation
   planned: finance-flavoured realism and, later, a small real-data anchor set.
