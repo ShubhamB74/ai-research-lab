@@ -6,3 +6,4 @@ tasks/
 runs/
 reports/
 .pytest_cache/
+runs_*/

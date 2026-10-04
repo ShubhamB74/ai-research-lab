@@ -1,4 +1,4 @@
-.PHONY: install test generate baselines clean
+.PHONY: install test generate baselines selftest clean
 
 install:
 	pip install -e ".[dev]"
@@ -14,5 +14,9 @@ generate:
 baselines:
 	python -m failurelab.cli baselines --tasks tasks --out runs
 
+# Scripted model through the full LLM harness (sandbox, tool loop, transcripts); needs no API key
+selftest:
+	python -m failurelab.cli selftest --tasks tasks --policy careful --max-tasks 12
+
 clean:
-	rm -rf tasks runs reports
+	rm -rf tasks runs reports runs_selftest runs_smoke runs_llm

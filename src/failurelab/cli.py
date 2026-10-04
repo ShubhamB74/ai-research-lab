@@ -1,4 +1,4 @@
-"""CLI:  python -m failurelab.cli generate | baselines"""
+"""CLI:  python -m failurelab.cli generate | baselines | selftest | llm-run"""
 from __future__ import annotations
 
 import argparse
@@ -49,6 +49,48 @@ def cmd_baselines(args: argparse.Namespace) -> None:
     Path("reports/baseline_scorecard.md").write_text(md + "\n")
 
 
+def _print_scorecard(df) -> None:
+    print(to_markdown(summarize(df)))
+    print("\nNOTE: repeated runs of a task are not independent; these intervals are optimistic. "
+          "Phase 4 uses task-clustered intervals.")
+
+
+def cmd_selftest(args: argparse.Namespace) -> None:
+    """Run a SCRIPTED model through the full harness (sandbox, tool loop, transcripts, grading).
+    Needs no API key. Verifies plumbing only, not any LLM."""
+    from .agents.llm_agent import LLMAgent
+    from .experiment import select_tasks
+    from .llm import ScriptedClient
+    from .scripted_policies import reference_policy
+    cls = {"naive": "NaiveAgent", "careful": "HeuristicCarefulAgent"}[args.policy]
+    tasks, runs = Path(args.tasks), Path(args.out)
+    client = ScriptedClient(f"scripted-{args.policy}", reference_policy(cls))
+    agent = LLMAgent(client, "none", sandbox_kwargs={"allow_failurelab": True},
+                     transcript_dir=runs / f"scripted-{args.policy}_none" / "transcripts")
+    ids = select_tasks(tasks / "private", args.max_tasks, args.seed)
+    scores = run_agent(agent, tasks / "public", tasks / "private", runs, task_ids=ids)
+    _print_scorecard(to_frame({agent.name: scores}))
+
+
+def cmd_llm_run(args: argparse.Namespace) -> None:
+    from .experiment import plan, run_llm_experiment
+    conditions = args.conditions.split(",")
+    print(plan(Path(args.tasks), conditions, args.reps, args.max_tasks, args.max_turns, args.seed))
+    if args.dry_run:
+        return
+    from .llm import AnthropicClient, BudgetedClient, RunAborted
+    client = BudgetedClient(AnthropicClient(args.model, temperature=args.temperature, max_tokens=args.max_tokens),
+                            args.max_calls)
+    try:
+        df = run_llm_experiment(client, Path(args.tasks), Path(args.out), conditions, args.reps,
+                                args.max_tasks, args.max_turns, args.seed,
+                                sandbox_kwargs={"cmd_prefix": args.sandbox_prefix.split()} if args.sandbox_prefix else None)
+    except RunAborted as exc:
+        print(f"\nRun stopped: {exc}\nCompleted tasks are saved; re-run the same command to resume.")
+        return
+    _print_scorecard(df)
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="failurelab")
     sub = p.add_subparsers(required=True)
@@ -63,6 +105,28 @@ def main() -> None:
     b.add_argument("--out", default="runs")
     b.add_argument("--seed", type=int, default=0)
     b.set_defaults(fn=cmd_baselines)
+    st = sub.add_parser("selftest", help="scripted model through the full harness (no API key needed)")
+    st.add_argument("--tasks", default="tasks")
+    st.add_argument("--out", default="runs_selftest")
+    st.add_argument("--policy", choices=["naive", "careful"], default="careful")
+    st.add_argument("--max-tasks", type=int, default=12)
+    st.add_argument("--seed", type=int, default=0)
+    st.set_defaults(fn=cmd_selftest)
+    lr = sub.add_parser("llm-run", help="run an Anthropic model through the harness (needs ANTHROPIC_API_KEY)")
+    lr.add_argument("--tasks", default="tasks")
+    lr.add_argument("--out", default="runs_llm")
+    lr.add_argument("--model", required=True, help="model id; check the current list in Anthropic's docs")
+    lr.add_argument("--conditions", default="none,generic_hint,checklist")
+    lr.add_argument("--reps", type=int, default=1)
+    lr.add_argument("--max-tasks", type=int, default=None, help="use balanced clean/trapped pairs; omit for all")
+    lr.add_argument("--max-turns", type=int, default=15)
+    lr.add_argument("--max-calls", type=int, default=200, help="hard cap on total model calls")
+    lr.add_argument("--max-tokens", type=int, default=4096)
+    lr.add_argument("--temperature", type=float, default=None, help="omit to use the API default")
+    lr.add_argument("--seed", type=int, default=0, help="task-subset selection seed")
+    lr.add_argument("--sandbox-prefix", default="", help='command prefix for the sandbox, e.g. "unshare -rn"')
+    lr.add_argument("--dry-run", action="store_true")
+    lr.set_defaults(fn=cmd_llm_run)
     args = p.parse_args()
     args.fn(args)
 

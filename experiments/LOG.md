@@ -15,6 +15,16 @@ Add newest entries at the top. Copy the template.
 
 ---
 
+### EXP-006 | (date) | Phase 3: does the harness add or hide anything? (scripted model, no API)
+- **Predicted (before running):** a scripted model that preregisters, runs the baseline analysis inside the sandbox, reads the printed result and submits it will reproduce the direct baseline scores EXACTLY for naive and heuristic_careful on all three families; the sandbox hides API keys and answer-key paths; an API outage aborts a run instead of being scored.
+- **Result:** exact match on 36 tasks x 2 agents; all sandbox and abort/resume tests passed (88 tests).
+- **Bug found on the way:** `select_tasks` rotated through cells in sorted order, so a 12-task subset was all leakage (the first family). Caught by the self-test output, fixed by rotating across families first, test added.
+- **Verdict:** survived, for the plumbing only. No real LLM has been run; the Anthropic adapter is tested against a fake SDK.
+- **Decisions to remember:** the prompt discloses the scoring rule and the question already asks for flags, so `none` = detection when asked to look. Repeated runs are not independent (cluster by task in Phase 4).
+- **Next:** run the live smoke test (docs/RUNNING_EXPERIMENTS.md step 3), freeze docs/PREREGISTRATION.md, then Phase 4.
+
+---
+
 ### EXP-005 | (date) | Phase 2 validation battery on survivorship and multiple testing
 - **Predicted (before running):** oracle 100%; heuristic_careful solves every cell with zero false alarms; naive fooled in both families; always-flag 100% false alarms; the cheap-checks agent catches only explicit cues.
 - **Result (36 pairs per family, 57 tests):** all predictions held. Cheap checks: survivor_only_panel recall 1/1/0 (easy/medium/hard), backfill 1 across cells, visible_candidates 1, hidden_winner 0.

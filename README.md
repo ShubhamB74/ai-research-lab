@@ -86,9 +86,10 @@ flowchart LR
 
 ```bash
 pip install -e ".[dev]"
-make test         # 57 tests: schema, grader (+mutation tests), 3 generators x every cell, runner, benchmark validation
+make test         # 88 tests: schema, grader (+mutation tests), 3 generators x every cell, runner, sandbox, harness, benchmark validation
 make generate     # 36 seeds x 2 variants x 3 families = 216 tasks (~170 MB; use --n 18 for lighter) -> ./tasks/public + ./tasks/private
 make baselines    # reference agents -> scorecard
+make selftest     # scripted model through the full LLM harness (no API key)
 ```
 
 ## The leakage family (Phase 1): 3 mechanisms x 3 difficulties
@@ -192,6 +193,50 @@ Reading these honestly: the Phase 2 ladders are about *what kind of attention* c
 (visible vs metadata vs inference from absence), not smooth difficulty. Whether LLM agents track
 this pattern is the Phase 3/4 question.
 
+## Phase 3: the LLM agent harness
+
+```mermaid
+flowchart LR
+    P[Prompt builder<br/>none / generic_hint / checklist] --> L
+    subgraph Loop["LLMAgent loop (per task)"]
+        L[Model client<br/>Anthropic or scripted] -->|tool calls| D{Dispatch}
+        D -->|preregister| R[record hypothesis<br/>before analysis?]
+        D -->|run_python| S[Sandbox: persistent Python,<br/>only data.csv, no secrets]
+        D -->|submit_answer| V[Schema validation]
+        S -->|stdout / errors| L
+        V -->|invalid: fed back| L
+    end
+    V -->|valid| G[Existing grader]
+    Loop --> T[(Transcript JSON:<br/>prompts, code, outputs, usage)]
+    G --> SC[scores.jsonl + scorecard]
+```
+
+| Piece | What it does |
+|---|---|
+| `sandbox.py` | Persistent Python session per task; workdir holds only `data.csv`; scrubbed env (no API keys); timeout, memory cap, output truncation; `failurelab` imports blocked. A convenience boundary, not a security boundary. |
+| `prompts.py` | Three conditions that differ only by an appended block. `checklist` names all six taxonomy items for every task, so it never reveals which trap is present. |
+| `agents/llm_agent.py` | Tool loop with `preregister`, `run_python`, `submit_answer`; schema errors are fed back (up to 2 retries); every run saves a full transcript; completed tasks are reused on re-run. |
+| `llm.py` | `AnthropicClient`, `BudgetedClient` (hard call cap), `ScriptedClient` (fake model for tests). Budget exhaustion and API outages raise `RunAborted`, which stops the run and is never scored as an agent failure. |
+| `experiment.py` | Rep x condition loops, balanced clean/trapped pair selection, `scores.jsonl`. |
+
+Outcomes recorded per run: `submitted`, `invalid_format`, `no_submission`, `max_turns`. Process facts
+(preregistered before running code? how many cells? tripwire hits? token usage) are logged but not scored.
+
+**What was verified (offline, with a scripted model):** the Phase 3 exit test runs a scripted model through
+the entire loop (real sandbox, real tool dispatch, validation, grading) on 36 tasks across all three
+families and reproduces the direct baseline scores exactly for two agents. Sandbox isolation, resume,
+abort-vs-score handling, format retries and the select/plan logic have their own tests.
+**What was NOT verified:** any real LLM run. `AnthropicClient` is only tested against a fake SDK object.
+Use `docs/RUNNING_EXPERIMENTS.md` (smoke test first).
+
+Disclosed design choices that are threats to validity:
+- The base prompt explains the scoring rule (false flags count against you) so recall cannot be inflated by
+  flag-spamming; and every task question already says "flag any methodological problems you find". So the
+  `none` condition measures detection when asked to look, not unprompted discovery.
+- The base prompt defines `effect_exists` as "supported after correcting for problems you identify", which
+  the survivorship convention requires.
+- Reps are not independent draws; Phase 4 will cluster by task.
+
 ## Roadmap (build phase by phase; each phase has an exit test)
 
 | Phase | Deliverable | Exit criterion |
@@ -199,12 +244,12 @@ this pattern is the Phase 3/4 question.
 | **0 (done)** | Skeleton, schema, grader, leakage generator, baselines, tests | Oracle=100%, naive fooled, always-flag 100% false alarms |
 | **1 (done)** | 3 leakage mechanisms x 3 difficulties, calibrated ground truth, grader mutation + invariance tests, runner robustness tests | All 9 cells solved by `heuristic_careful`; clean twins verified exact; ladder separates `sanity_check` (recall 1.00 / 0.17 / 0.00) |
 | **2 (done)** | `survivorship.py` and `multiple_testing.py`, 2 mechanisms x 3 difficulties each, schema-based reference solvers (`analysis.py`) | `heuristic_careful` solves all 21 cells with 0 false alarms; oracle 100%; always-flag 100% false alarms; 57 tests |
-| **3** | LLM agent harness: sandboxed Python tool, transcript capture, prompt conditions (`none` / `generic_hint` / `checklist`), k repeated runs | Pipeline reproduces baseline numbers for a scripted agent; transcripts stored |
+| **3 (done, offline-verified)** | LLM agent harness: sandboxed Python tool, transcript capture, prompt conditions (`none` / `generic_hint` / `checklist`), k repeated runs, resumable, budget-capped | Scripted model through the full harness reproduces baseline scores exactly on 36 tasks; transcripts stored. **A live-model smoke test is still yours to run.** |
 | **4** | Pre-registered experiments: freeze hypotheses, run N seeds x conditions x models, CIs | Analysis script regenerates every number in the report |
 | **5** | Failure taxonomy from transcripts, one-page report, reproducibility check from a fresh clone | Someone else reproduces the headline table |
 | Stretch | Overfitting, confounding, regime shift families | Only if Phases 0-5 are done |
 
-## Known limitations
+## Known limitations (state these in any write-up)
 
 - Synthetic data: agents may recognise toy structure, and real traps are messier. Mitigation
   planned: finance-flavoured realism and, later, a small real-data anchor set.
@@ -217,6 +262,7 @@ this pattern is the Phase 3/4 question.
   barrier for survivorship, Gaussian signals for multiple testing). Real traps are messier.
 - Survivorship conventions are stated assumptions (see above); only upward-bias worlds are modelled.
 - Multiple testing uses a normal-approximation Bonferroni threshold on pooled correlations.
+- The sandbox is not a security boundary (see `docs/RUNNING_EXPERIMENTS.md`); the tripwire is for review only.
 - 6 tasks per cell is a design check, not a statistic; headline claims need the Phase 4 sample sizes.
 - The 3-leakage-mechanism ladder was designed by me; detectors in the reference agents were written
   after seeing the mechanisms, so "solvable" means "solvable by someone who knows the trap types".
