@@ -15,6 +15,21 @@ Add newest entries at the top. Copy the template.
 
 ---
 
+### EXP-005 | (date) | Phase 2 validation battery on survivorship and multiple testing
+- **Predicted (before running):** oracle 100%; heuristic_careful solves every cell with zero false alarms; naive fooled in both families; always-flag 100% false alarms; the cheap-checks agent catches only explicit cues.
+- **Result (36 pairs per family, 57 tests):** all predictions held. Cheap checks: survivor_only_panel recall 1/1/0 (easy/medium/hard), backfill 1 across cells, visible_candidates 1, hidden_winner 0.
+- **Verdict:** survived. Caveat: 6 tasks per cell, and the cues were defined by me, so "solvable" means solvable by someone who knows the trap types.
+- **Next:** Phase 3 (LLM agent harness).
+
+### EXP-004 | (date) | Can survivorship tasks plant a negative effect? (killed before coding)
+- **Predicted:** if the true mean is negative, survivor-only data still shows a negative mean, so "a negative result survives survivorship bias" gives an identifiable truth.
+- **Result (simulation, 120 names, 400 days, delist at -40%):** mu = 0 gives survivors t = +4.1 vs clean t = 0.1; mu = -0.001 gives survivors t = 0.0 (clean t = -9.0). Conditioning on survival erases the negative drift.
+- **Verdict:** killed. Survivor-only data cannot identify a negative effect either.
+- **Consequence:** adopted an identifiability convention (the supported answer for survivor-only tasks is "no effect") and only plant null/positive worlds there; backfill, where filtering recovers the data, keeps all signs. Documented in the README and generator docstring.
+- **Lesson:** simulate the bias before designing the ground truth around it.
+
+---
+
 ### EXP-003 | (date) | Phase 1: do the difficulty levels separate kinds of diligence?
 - **Predicted (before running):** a "too good to be true" effect-size check (`sanity_check`) catches easy leaks (corr ~0.4), misses subtle ones; the reverse-engineering agent solves every cell.
 - **Result (36 pairs, n=12 per difficulty):** sanity_check flag recall 1.00 / 0.17 / 0.00 (easy/medium/hard); heuristic_careful 1.00 across all; naive 0.00.

@@ -1,4 +1,4 @@
-# AI Research Lab
+# AI Research Failure Lab
 
 A benchmark that tests whether AI research agents catch **planted statistical traps**, graded
 **deterministically** against known ground truth (no LLM judge).
@@ -65,7 +65,11 @@ flowchart LR
    an honest test agrees with the planted truth (null: |t|<2; effect: |t|>4.5, right sign). This
    is a disclosed selection effect: tasks are unambiguous by construction, so they are easier than
    raw noisy data. Found via a real failure (EXP-002).
-8. **Determinism.** Same seed gives byte-identical tasks. Invalid agent output is a failure, not a skip.
+8. **Identifiability conventions.** Ground truth means *the conclusion the data can support*. For
+   survivor-only data the bias is upward, so a positive effect is unidentifiable and the supported
+   answer is "no effect" even when the world has one (the clean twin keeps the true answer). Each
+   family states its convention in its generator docstring and in `params["truth_convention"]`.
+9. **Determinism.** Same seed gives byte-identical tasks. Invalid agent output is a failure, not a skip.
 
 ## Metrics
 
@@ -82,8 +86,8 @@ flowchart LR
 
 ```bash
 pip install -e ".[dev]"
-make test         # 39 tests: schema, grader (+mutation tests), generator cells, runner, benchmark validation
-make generate     # 36 seeds x 2 variants (4 per mechanism/difficulty cell) -> ./tasks/public + ./tasks/private
+make test         # 57 tests: schema, grader (+mutation tests), 3 generators x every cell, runner, benchmark validation
+make generate     # 36 seeds x 2 variants x 3 families = 216 tasks (~170 MB; use --n 18 for lighter) -> ./tasks/public + ./tasks/private
 make baselines    # reference agents -> scorecard
 ```
 
@@ -103,7 +107,7 @@ Difficulty = how contaminated the signal is: blend weight 1.0 / 0.25 / 0.10 (or 
 1.0 / 0.30 / 0.08). Easy leaks give an absurd effect size (corr ~0.4) that a plausibility check
 catches; hard leaks give a believable weak signal (corr ~0.05-0.10).
 
-## Reference-agent results (NOT LLMs): 72 tasks = 36 clean/trapped pairs
+## Leakage results (reference agents, NOT LLMs): 72 tasks = 36 clean/trapped pairs
 
 These prove the benchmark discriminates before any model is evaluated.
 
@@ -132,13 +136,69 @@ What this shows, and what it does not:
   answer unchanged), which is why `flag_recall` and `right_wrong_reason` are first-class metrics.
 - These are scripted agents with hand-set thresholds, not evidence about LLMs.
 
+## Phase 2 families: survivorship and multiple testing
+
+Same validation battery as leakage: clean twins as exact negative controls, calibrated truth, public
+text identical across twins, a solvability proof, and tests per cell. 6 cells per family.
+
+**Survivorship** (question: is the universe's average daily return different from zero?)
+
+| Mechanism | Trapped twin | Cue for a careful analyst | Difficulty |
+|---|---|---|---|
+| `survivor_only_panel` | only names alive at the end (names are delisted after a -40% cumulative return) | zero attrition in a panel the vendor says covers every name; `status` column with no delistings; gaps in sequential ids | easy: all three cues; medium: id gaps (+ balance); hard: balance only |
+| `backfilled_membership` | vendor backfilled history before each stock joined an index | rows dated before `index_add_date` | backfill length 60 / 30 / 10 days (bias shrinks, cue stays) |
+
+Truth conventions: in `survivor_only_panel` the supported answer is always "no effect" (bias is
+upward, so a positive effect is unidentifiable; worlds with a negative effect are excluded because
+survivorship erases a negative drift, which I verified by simulation, see EXP-004). In
+`backfilled_membership` filtering to member rows recovers the clean data, so the true effect (any
+sign) is the answer.
+
+**Multiple testing** (question: does the research desk's signal genuinely predict next-day return?)
+
+| Mechanism | Trapped twin | Cue | Difficulty |
+|---|---|---|---|
+| `visible_candidates` | M signal columns delivered, true one at a random position | count the columns, correct for M tests | M = 200 / 40 / 12 |
+| `hidden_winner` | only the best-looking signal delivered, plus `library_size` = M | read `library_size`, correct for M tests | M = 200 / 40 / 12 |
+
+The clean twin is one pre-specified signal. Honest analysis is a Bonferroni-corrected test over the M
+signals searched. Naive failure is NOT conditioned on: it is whatever chance produces, and it falls
+as M shrinks because a smaller search throws up fewer seductive false positives.
+
+### Reference results for Phase 2 (n = 36 pairs per family; scripted agents, NOT LLMs)
+
+| agent | family | accuracy (trapped) | fooled | flag recall | false-flag rate (clean) |
+|---|---|---|---|---|---|
+| oracle (cheats) | both | 1.00 | 0.00 | 1.00 | 0.00 |
+| heuristic_careful | both | 1.00 | 0.00 | 1.00 | 0.00 |
+| sanity_check (cheap checks) | survivorship | 0.83 | 0.17 | 0.83 | 0.00 |
+| sanity_check (cheap checks) | multiple testing | 0.83 | 0.17 | 0.50 | 0.00 |
+| naive | survivorship | 0.31 | 0.64 | 0.00 | 0.00 |
+| naive | multiple testing | 0.67 | 0.33 | 0.00 | 0.00 |
+| always_flag | both | 0.31 / 0.67 | 0.64 / 0.33 | 1.00 | **1.00** |
+
+Cheap-checks agent, flag recall by cell (n = 6 per cell, so read these as pass/fail on a design
+check, not as rates):
+
+| cell | recall | why |
+|---|---|---|
+| survivor_only_panel: easy, medium | 1.00 | explicit cues (status column, id gaps) |
+| survivor_only_panel: hard | 0.00 | only cue is a balanced panel with zero attrition |
+| backfilled_membership: all | 1.00 | the `index_add_date` column is cheap to check |
+| visible_candidates: all | 1.00 | the column count is visible |
+| hidden_winner: all | 0.00 | requires reading the `library_size` metadata |
+
+Reading these honestly: the Phase 2 ladders are about *what kind of attention* catches the trap
+(visible vs metadata vs inference from absence), not smooth difficulty. Whether LLM agents track
+this pattern is the Phase 3/4 question.
+
 ## Roadmap (build phase by phase; each phase has an exit test)
 
 | Phase | Deliverable | Exit criterion |
 |---|---|---|
 | **0 (done)** | Skeleton, schema, grader, leakage generator, baselines, tests | Oracle=100%, naive fooled, always-flag 100% false alarms |
 | **1 (done)** | 3 leakage mechanisms x 3 difficulties, calibrated ground truth, grader mutation + invariance tests, runner robustness tests | All 9 cells solved by `heuristic_careful`; clean twins verified exact; ladder separates `sanity_check` (recall 1.00 / 0.17 / 0.00) |
-| **2** | `survivorship.py` and `multiple_testing.py` (design sketches in the files) | Same validation battery passes for each new family |
+| **2 (done)** | `survivorship.py` and `multiple_testing.py`, 2 mechanisms x 3 difficulties each, schema-based reference solvers (`analysis.py`) | `heuristic_careful` solves all 21 cells with 0 false alarms; oracle 100%; always-flag 100% false alarms; 57 tests |
 | **3** | LLM agent harness: sandboxed Python tool, transcript capture, prompt conditions (`none` / `generic_hint` / `checklist`), k repeated runs | Pipeline reproduces baseline numbers for a scripted agent; transcripts stored |
 | **4** | Pre-registered experiments: freeze hypotheses, run N seeds x conditions x models, CIs | Analysis script regenerates every number in the report |
 | **5** | Failure taxonomy from transcripts, one-page report, reproducibility check from a fresh clone | Someone else reproduces the headline table |
@@ -153,8 +213,11 @@ What this shows, and what it does not:
 - Public-knowledge contamination: look-ahead bias is well known, so a pass may reflect recall of
   the concept rather than detection skill. The prompt-condition ablation partly separates these.
 - Calibrated ground truth (see rule 7) makes tasks unambiguous by selection; real data is murkier.
-- Only one signal-and-return world so far (AR(1) returns, 5-day signal). Generalisation across
-  worlds is untested until Phase 2 adds other families.
+- Each family is one synthetic world (AR(1) returns for leakage, iid returns with a delisting
+  barrier for survivorship, Gaussian signals for multiple testing). Real traps are messier.
+- Survivorship conventions are stated assumptions (see above); only upward-bias worlds are modelled.
+- Multiple testing uses a normal-approximation Bonferroni threshold on pooled correlations.
+- 6 tasks per cell is a design check, not a statistic; headline claims need the Phase 4 sample sizes.
 - The 3-leakage-mechanism ladder was designed by me; detectors in the reference agents were written
   after seeing the mechanisms, so "solvable" means "solvable by someone who knows the trap types".
 - Grading checks the *conclusion and flags*, not the quality of reasoning; transcripts are

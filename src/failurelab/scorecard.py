@@ -53,18 +53,20 @@ def summarize(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def breakdown(df: pd.DataFrame, key: str) -> pd.DataFrame:
-    """Trapped tasks only, one row per (agent, key). Used for the difficulty ladder and the
+    """Trapped tasks only, one row per (agent, family, key). Used for the difficulty ladder and the
     per-mechanism table. Order of `key` values follows their first appearance sorted naturally."""
     order = {"easy": 0, "medium": 1, "hard": 2}
+    if key == "cell":   # mechanism/difficulty, so mechanisms with different cues are not blended
+        df = df.assign(cell=df["mechanism"] + "/" + df["difficulty"])
     out = []
-    for (agent, k), g in df[df.variant == "trapped"].groupby(["agent", key]):
+    for (agent, fam, k), g in df[df.variant == "trapped"].groupby(["agent", "family", key]):
         n = len(g)
-        out.append({"agent": agent, key: k, "n": n,
+        out.append({"agent": agent, "family": fam, key: k, "n": n,
                     "accuracy": _fmt(int(g.conclusion_correct.sum()), n),
                     "fooled_rate": _fmt(int(g.fooled.sum()), n),
                     "flag_recall": _fmt(int(g.tp.sum()), int(g.tp.sum() + g.fn.sum())),
-                    "_o": order.get(k, 9)})
-    res = pd.DataFrame(out).sort_values(["agent", "_o", key]).drop(columns="_o")
+                    "_o": order.get(str(k).split("/")[-1], 9)})
+    res = pd.DataFrame(out).sort_values(["agent", "family", "_o", key]).drop(columns="_o")
     return res.reset_index(drop=True)
 
 

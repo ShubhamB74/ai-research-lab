@@ -41,7 +41,8 @@ def cmd_baselines(args: argparse.Namespace) -> None:
     df = to_frame(by_agent)
     parts = [("Overall (family x variant)", summarize(df)),
              ("Difficulty ladder (trapped tasks)", breakdown(df, "difficulty")),
-             ("By mechanism (trapped tasks)", breakdown(df, "mechanism"))]
+             ("By mechanism (trapped tasks)", breakdown(df, "mechanism")),
+             ("By cell: mechanism/difficulty (trapped tasks)", breakdown(df, "cell"))]
     md = "\n\n".join(f"### {title}\n\n{to_markdown(t)}" for title, t in parts)
     print(md)
     Path("reports").mkdir(exist_ok=True)

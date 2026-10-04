@@ -41,6 +41,6 @@ def test_bad_agents_are_scored_as_invalid_not_crashed(tmp_path):
     pub, priv = tmp_path / "t" / "public", tmp_path / "t" / "private"
     for agent in (Crash(), Junk(), WrongId(), Inconsistent()):
         scores = run_agent(agent, pub, priv, tmp_path / "runs")
-        assert len(scores) == 4
+        assert len(scores) == 12   # 3 families x 2 seeds x 2 variants
         assert all((not s.valid) and (not s.conclusion_correct) and s.brier == 1.0 for s in scores)
-        assert sum(s.fn for s in scores) == 2  # missed flags still counted on the 2 trapped tasks
+        assert sum(s.fn for s in scores) == 6  # missed flags still counted on the 6 trapped tasks
