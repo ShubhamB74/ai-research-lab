@@ -1,0 +1,34 @@
+{
+  "_comment": "Machine-readable pre-registration. Fill every null, then run: python -m failurelab.cli freeze. Do not edit after freezing; record changes under 'amendments' instead.",
+  "title": "AI Research Failure Lab: pre-registration",
+  "design": {
+    "models": null,
+    "_models_example": ["anthropic:<model-id>"],
+    "conditions": ["none", "generic_hint", "checklist"],
+    "reps": null,
+    "max_tasks": null,
+    "task_selection_seed": 0,
+    "task_set": {"n_per_family": 36, "seed": 0, "salt": "failurelab-v0"},
+    "max_turns": 15,
+    "temperature": null
+  },
+  "analysis": {
+    "bootstrap_B": 10000,
+    "bootstrap_seed": 12345,
+    "exploratory_level": 0.95,
+    "confirmatory_alpha": 0.05,
+    "n_confirmatory_hypotheses": 4,
+    "cluster_unit": "clean/trapped pair (task and its twin, all reps and conditions)",
+    "primary_population": "all runs; invalid or non-submitted runs count as failures",
+    "max_nonsubmitted_share": 0.10
+  },
+  "rules": {
+    "baseline_condition": "none",
+    "treatment_condition": "checklist",
+    "H1": {"recall_below": 0.5, "clean_accuracy_above": 0.9, "falsify_if_recall_lower_above": 0.4},
+    "H2": {"delta_recall_min": 0.2, "delta_false_flag_max": 0.1, "falsify_if_delta_recall_below": 0.1},
+    "H3": {"share_min": 0.25, "support_lower_above": 0.1, "falsify_if_share_below": 0.1},
+    "H4": {}
+  },
+  "amendments": []
+}

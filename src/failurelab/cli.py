@@ -1,8 +1,9 @@
-"""CLI:  python -m failurelab.cli generate | baselines | selftest | llm-run"""
+"""CLI:  python -m failurelab.cli generate | baselines | selftest | llm-run | freeze | analyze | review | power"""
 from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 from pathlib import Path
 
 from .agents import (AlwaysFlagAgent, HeuristicCarefulAgent, NaiveAgent, OracleAgent,
@@ -91,6 +92,49 @@ def cmd_llm_run(args: argparse.Namespace) -> None:
     _print_scorecard(df)
 
 
+def cmd_freeze(args: argparse.Namespace) -> None:
+    from .prereg import freeze
+    rec = freeze(args.prereg, args.doc, args.lock)
+    print(json.dumps(rec, indent=2))
+    print("\nNow COMMIT docs/prereg.json, docs/PREREGISTRATION.md and the lock file BEFORE the first live run.")
+
+
+def cmd_analyze(args: argparse.Namespace) -> None:
+    from .study import StudyError, run_study
+    try:
+        res = run_study(args.tasks, args.runs, args.out, args.prereg, args.doc, args.lock, args.exclusions,
+                        args.allow_incomplete, args.allow_unreviewed)
+    except StudyError as exc:
+        raise SystemExit(f"analysis stopped: {exc}")
+    print(f"{res['status']}" + (f": {'; '.join(res['reasons'])}" if res["reasons"] else ""))
+    for m, e in res["models"].items():
+        print(f"  {m}: " + ", ".join(f"{h}={v['verdict']}" for h, v in e["hypotheses"].items()))
+    print(f"wrote {args.out}/report.md, results.json, provenance.json")
+
+
+def cmd_review(args: argparse.Namespace) -> None:
+    from .study import tripwire_review
+    items = tripwire_review(args.runs)
+    print(f"{len(items)} tripwire-flagged run(s)")
+    for it in items:
+        print(f"\n[{it['model']} | {it['condition']} | rep{it['rep']} | {it['task_id']}] hits={it['hits']}")
+        for ln in it["lines"][:8]:
+            print("    " + ln[:200])
+    if items:
+        print('\nRecord a decision for each in the exclusions file: '
+              '{"model","condition","rep","task_id","action":"keep"|"exclude","reason":"..."}')
+
+
+def cmd_power(args: argparse.Namespace) -> None:
+    from .power import simulate_power
+    res = simulate_power(args.pairs, args.reps, args.recall_none, args.recall_checklist, args.ffr_none,
+                         args.ffr_checklist, args.clean_acc, args.trapped_acc, args.pair_sd, args.models,
+                         args.sims, seed=args.seed)
+    print(f"pairs={args.pairs} reps={args.reps} sims={args.sims} (ASSUMED rates; try a range)")
+    for h, t in res.items():
+        print(f"  {h}: " + ", ".join(f"{k}={v:.2f}" for k, v in t.items() if k != "not_evaluable"))
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="failurelab")
     sub = p.add_subparsers(required=True)
@@ -127,6 +171,39 @@ def main() -> None:
     lr.add_argument("--sandbox-prefix", default="", help='command prefix for the sandbox, e.g. "unshare -rn"')
     lr.add_argument("--dry-run", action="store_true")
     lr.set_defaults(fn=cmd_llm_run)
+    fz = sub.add_parser("freeze", help="validate docs/prereg.json and write the hash lock")
+    fz.add_argument("--prereg", default="docs/prereg.json")
+    fz.add_argument("--doc", default="docs/PREREGISTRATION.md")
+    fz.add_argument("--lock", default="experiments/prereg.lock")
+    fz.set_defaults(fn=cmd_freeze)
+    an = sub.add_parser("analyze", help="pre-registered analysis and report from one or more run directories")
+    an.add_argument("--tasks", default="tasks")
+    an.add_argument("--runs", nargs="+", required=True, help="directories containing scores.jsonl (one per model)")
+    an.add_argument("--out", default="report")
+    an.add_argument("--prereg", default="docs/prereg.json")
+    an.add_argument("--doc", default="docs/PREREGISTRATION.md")
+    an.add_argument("--lock", default="experiments/prereg.lock")
+    an.add_argument("--exclusions", default="experiments/exclusions.json")
+    an.add_argument("--allow-incomplete", action="store_true")
+    an.add_argument("--allow-unreviewed", action="store_true")
+    an.set_defaults(fn=cmd_analyze)
+    rv = sub.add_parser("review", help="list tripwire-flagged runs with the offending code lines")
+    rv.add_argument("--runs", nargs="+", required=True)
+    rv.set_defaults(fn=cmd_review)
+    pw = sub.add_parser("power", help="simulate how often the pre-registered rules would reach each verdict")
+    pw.add_argument("--pairs", type=int, required=True)
+    pw.add_argument("--reps", type=int, required=True)
+    pw.add_argument("--recall-none", type=float, required=True)
+    pw.add_argument("--recall-checklist", type=float, required=True)
+    pw.add_argument("--ffr-none", type=float, default=0.05)
+    pw.add_argument("--ffr-checklist", type=float, default=0.05)
+    pw.add_argument("--clean-acc", type=float, default=0.95)
+    pw.add_argument("--trapped-acc", type=float, default=0.5)
+    pw.add_argument("--pair-sd", type=float, default=1.0, help="between-pair heterogeneity (logit scale)")
+    pw.add_argument("--models", type=int, default=1)
+    pw.add_argument("--sims", type=int, default=200)
+    pw.add_argument("--seed", type=int, default=0)
+    pw.set_defaults(fn=cmd_power)
     args = p.parse_args()
     args.fn(args)
 

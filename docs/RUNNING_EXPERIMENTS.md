@@ -58,3 +58,57 @@ security boundary**: the process runs as your OS user and can read other files y
 `scores.jsonl` has one row per (agent, condition, rep, task) with all graded fields, `status`, token usage and
 tripwire hits. Repeated runs of the same task are **not independent**; the pooled intervals printed by the CLI
 are optimistic. Phase 4 analyses cluster by task. Report non-`submitted` statuses; do not silently drop them.
+
+---
+
+# Phase 4 protocol: pre-registered experiment and analysis
+
+## 7. Choose the design with the power planner (before spending anything)
+```bash
+python -m failurelab.cli power --pairs 54 --reps 3 --recall-none 0.2 --recall-checklist 0.7
+python -m failurelab.cli power --pairs 54 --reps 3 --recall-none 0.2 --recall-checklist 0.5 --ffr-checklist 0.15
+```
+It simulates experiments with ASSUMED true rates and applies the real decision rules, printing how often each verdict
+(supported / falsified / inconclusive) would occur. Try a range of assumptions, including a weak or zero effect.
+Example finding to expect: H1 is the hard one to confirm, because its clean-accuracy clause needs a tight interval at the
+Bonferroni level. If the answer to "can this design reach a verdict?" is no, increase `--pairs`, not the number of conditions.
+`max_tasks` in `prereg.json` is tasks, i.e. 2 x pairs.
+
+## 8. Fill in and freeze
+Edit `docs/prereg.json`: `design.models` (names exactly as in the runs, e.g. `anthropic:<model-id>`), `design.reps`,
+`design.max_tasks`. Then:
+```bash
+python -m failurelab.cli freeze
+git add docs/prereg.json docs/PREREGISTRATION.md experiments/prereg.lock && git commit -m "Freeze pre-registration"
+```
+Do this BEFORE the first live run, then push or otherwise timestamp the commit.
+
+## 9. Run every model with the SAME settings
+```bash
+python -m failurelab.cli llm-run --model <MODEL_A> --reps 3 --max-tasks 108 --max-calls 6000 --out runs_llm/modelA
+python -m failurelab.cli llm-run --model <MODEL_B> --reps 3 --max-tasks 108 --max-calls 6000 --out runs_llm/modelB
+```
+`--reps` and `--max-tasks` must equal the frozen design. Interrupted? Re-run the same command.
+
+## 10. Review tripwires, record decisions
+```bash
+python -m failurelab.cli review --runs runs_llm/modelA runs_llm/modelB
+```
+For each flagged run write an entry in `experiments/exclusions.json`:
+`{"model": "...", "condition": "...", "rep": 0, "task_id": "...", "action": "keep", "reason": "mentioned the word truth in a comment"}`
+(`action` is `keep` or `exclude`). Excluded runs stay in the completeness check but leave the statistics.
+
+## 11. Analyse
+```bash
+python -m failurelab.cli analyze --runs runs_llm/modelA runs_llm/modelB --out report
+```
+Writes `report/report.md`, `results.json`, `provenance.json`. Every number in the report is computed; the generator
+refuses to write a report containing a number it did not compute. Same inputs produce byte-identical outputs.
+A NON-CONFIRMATORY banner lists the reasons; report it as such, do not hide it. `--allow-incomplete` and
+`--allow-unreviewed` exist for smoke runs and force that banner.
+
+## 12. Rules for reading the results
+- Report all four hypotheses with their verdicts, including falsified and inconclusive ones.
+- Do not change thresholds after seeing data. Anything not in `prereg.json` is exploratory; say so.
+- Report `generic_hint` vs `none` and any per-cell findings as exploratory.
+- Keep the failure transcripts: Phase 5 builds the failure taxonomy from them.

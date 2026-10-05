@@ -86,7 +86,7 @@ flowchart LR
 
 ```bash
 pip install -e ".[dev]"
-make test         # 88 tests: schema, grader (+mutation tests), 3 generators x every cell, runner, sandbox, harness, benchmark validation
+make test         # 113 tests: schema, grader (+mutation tests), 3 generators x every cell, runner, sandbox, harness, statistics, analysis, benchmark validation
 make generate     # 36 seeds x 2 variants x 3 families = 216 tasks (~170 MB; use --n 18 for lighter) -> ./tasks/public + ./tasks/private
 make baselines    # reference agents -> scorecard
 make selftest     # scripted model through the full LLM harness (no API key)
@@ -237,6 +237,36 @@ Disclosed design choices that are threats to validity:
   the survivorship convention requires.
 - Reps are not independent draws; Phase 4 will cluster by task.
 
+## Phase 4: pre-registered analysis
+
+```mermaid
+flowchart LR
+    PR[docs/prereg.json<br/>+ PREREGISTRATION.md] -->|freeze| LK[(prereg.lock<br/>SHA-256 + git commit)]
+    PW[power planner] -.->|choose pairs, reps| PR
+    SC[(scores.jsonl<br/>per model)] --> AN
+    LK --> AN{analyze}
+    EX[(exclusions.json<br/>reviewed tripwires)] --> AN
+    AN --> G[Gates: lock intact?<br/>design complete?<br/>tripwires reviewed?<br/>non-submitted share ok?]
+    G --> V[Cluster bootstrap<br/>verdicts H1-H4]
+    V --> RP[report.md + results.json<br/>+ provenance.json]
+```
+
+| Piece | What it does |
+|---|---|
+| `prereg.py` + `docs/prereg.json` | Machine-readable plan with explicit decision rules; `freeze` validates and writes a hash lock. Changing either file afterwards makes the analysis NON-CONFIRMATORY. |
+| `inference.py` | Cluster bootstrap over clean/trapped pairs (task, twin, all reps and conditions), common random numbers for paired contrasts. Treating runs as independent would give intervals far too narrow. |
+| `study.py` | Gates, verdicts (`supported` / `falsified` / `inconclusive`), exploratory tables, data-quality and sensitivity tables, report. Numbers in the report are registered when computed and the text is scanned for unregistered numbers. |
+| `power.py` | Simulates experiments with assumed rates and applies the same decision rules, so the sample size is justified before any money is spent. |
+
+What the tests establish (all offline): planted effects are detected across seeds and a real effect is never called
+falsified; a null checklist effect is never called supported; a checklist that buys recall with false alarms is not
+supported; every gate (frozen lock, completeness, tripwire review, non-submitted share) changes the status; output is
+byte-for-byte reproducible; a hand-typed number in the report is rejected; and the whole pipeline runs on real
+`scores.jsonl` produced by the harness. Bootstrap interval coverage is checked on clustered synthetic data.
+
+What is NOT established: any result about real LLMs. No live experiment has been run. The reports used in tests are
+generated from synthetic scores with planted rates and must never be presented as findings.
+
 ## Roadmap (build phase by phase; each phase has an exit test)
 
 | Phase | Deliverable | Exit criterion |
@@ -245,7 +275,7 @@ Disclosed design choices that are threats to validity:
 | **1 (done)** | 3 leakage mechanisms x 3 difficulties, calibrated ground truth, grader mutation + invariance tests, runner robustness tests | All 9 cells solved by `heuristic_careful`; clean twins verified exact; ladder separates `sanity_check` (recall 1.00 / 0.17 / 0.00) |
 | **2 (done)** | `survivorship.py` and `multiple_testing.py`, 2 mechanisms x 3 difficulties each, schema-based reference solvers (`analysis.py`) | `heuristic_careful` solves all 21 cells with 0 false alarms; oracle 100%; always-flag 100% false alarms; 57 tests |
 | **3 (done, offline-verified)** | LLM agent harness: sandboxed Python tool, transcript capture, prompt conditions (`none` / `generic_hint` / `checklist`), k repeated runs, resumable, budget-capped | Scripted model through the full harness reproduces baseline scores exactly on 36 tasks; transcripts stored. **A live-model smoke test is still yours to run.** |
-| **4** | Pre-registered experiments: freeze hypotheses, run N seeds x conditions x models, CIs | Analysis script regenerates every number in the report |
+| **4 (tooling done; live runs are yours)** | Freeze lock, power planner, task-clustered bootstrap analysis, gated report | Analysis regenerates every number in the report byte-for-byte; every gate tested; **no live results exist yet** |
 | **5** | Failure taxonomy from transcripts, one-page report, reproducibility check from a fresh clone | Someone else reproduces the headline table |
 | Stretch | Overfitting, confounding, regime shift families | Only if Phases 0-5 are done |
 

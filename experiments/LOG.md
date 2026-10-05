@@ -15,6 +15,15 @@ Add newest entries at the top. Copy the template.
 
 ---
 
+### EXP-007 | (date) | Phase 4 tooling: can the pre-registered rules reach a verdict at a feasible size, and does the pipeline guard itself?
+- **Predicted (before running):** with 54 pairs and 3 reps, assumed recall 0.2 (baseline) vs 0.7 (checklist), H1 and H2 would both be supported most of the time; a null checklist effect would almost never be "supported".
+- **Result (simulation, 60 runs per scenario):** H2 supported 83 percent when the effect is real, 0 percent when null. H1 supported only 55 percent: the clean-accuracy clause (lower bound above 0.9 at the Bonferroni level) is the bottleneck, not the recall clause.
+- **Verdict:** half killed. The design cannot reliably confirm H1 at this size; either more pairs or accept that H1 may be inconclusive. This is why the power planner exists.
+- **Bugs found by my own tests:** (1) the report's number-provenance scanner flagged the freeze timestamp as an uncomputed number; fixed by rendering provenance strings as literals, and the same for gate reasons. (2) Excluding a reviewed run made the design look incomplete; completeness is now judged before exclusions. (3) My "planted effect is confirmed" test depended on one lucky seed: on seed 0 the false-flag difference was +0.09 so H2 was correctly inconclusive. Rewrote it to assert properties across seeds (never falsified; supported in most).
+- **Next:** pick the design with `power`, fill and freeze `docs/prereg.json`, commit the lock, run the live experiment (yours), review tripwires, run `analyze`.
+
+---
+
 ### EXP-006 | (date) | Phase 3: does the harness add or hide anything? (scripted model, no API)
 - **Predicted (before running):** a scripted model that preregisters, runs the baseline analysis inside the sandbox, reads the printed result and submits it will reproduce the direct baseline scores EXACTLY for naive and heuristic_careful on all three families; the sandbox hides API keys and answer-key paths; an API outage aborts a run instead of being scored.
 - **Result:** exact match on 36 tasks x 2 agents; all sandbox and abort/resume tests passed (88 tests).
