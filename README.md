@@ -279,7 +279,7 @@ generated from synthetic scores with planted rates and must never be presented a
 | **5** | Failure taxonomy from transcripts, one-page report, reproducibility check from a fresh clone | Someone else reproduces the headline table |
 | Stretch | Overfitting, confounding, regime shift families | Only if Phases 0-5 are done |
 
-## Known limitations (state these in any write-up)
+## Known limitations
 
 - Synthetic data: agents may recognise toy structure, and real traps are messier. Mitigation
   planned: finance-flavoured realism and, later, a small real-data anchor set.
