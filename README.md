@@ -271,11 +271,11 @@ generated from synthetic scores with planted rates and must never be presented a
 
 | Phase | Deliverable | Exit criterion |
 |---|---|---|
-| **0 (done)** | Skeleton, schema, grader, leakage generator, baselines, tests | Oracle=100%, naive fooled, always-flag 100% false alarms |
-| **1 (done)** | 3 leakage mechanisms x 3 difficulties, calibrated ground truth, grader mutation + invariance tests, runner robustness tests | All 9 cells solved by `heuristic_careful`; clean twins verified exact; ladder separates `sanity_check` (recall 1.00 / 0.17 / 0.00) |
-| **2 (done)** | `survivorship.py` and `multiple_testing.py`, 2 mechanisms x 3 difficulties each, schema-based reference solvers (`analysis.py`) | `heuristic_careful` solves all 21 cells with 0 false alarms; oracle 100%; always-flag 100% false alarms; 57 tests |
-| **3 (done, offline-verified)** | LLM agent harness: sandboxed Python tool, transcript capture, prompt conditions (`none` / `generic_hint` / `checklist`), k repeated runs, resumable, budget-capped | Scripted model through the full harness reproduces baseline scores exactly on 36 tasks; transcripts stored. **A live-model smoke test is still yours to run.** |
-| **4 (tooling done; live runs are yours)** | Freeze lock, power planner, task-clustered bootstrap analysis, gated report | Analysis regenerates every number in the report byte-for-byte; every gate tested; **no live results exist yet** |
+| **0** | Skeleton, schema, grader, leakage generator, baselines, tests | Oracle=100%, naive fooled, always-flag 100% false alarms |
+| **1** | 3 leakage mechanisms x 3 difficulties, calibrated ground truth, grader mutation + invariance tests, runner robustness tests | All 9 cells solved by `heuristic_careful`; clean twins verified exact; ladder separates `sanity_check` (recall 1.00 / 0.17 / 0.00) |
+| **2** | `survivorship.py` and `multiple_testing.py`, 2 mechanisms x 3 difficulties each, schema-based reference solvers (`analysis.py`) | `heuristic_careful` solves all 21 cells with 0 false alarms; oracle 100%; always-flag 100% false alarms; 57 tests |
+| **3** | LLM agent harness: sandboxed Python tool, transcript capture, prompt conditions (`none` / `generic_hint` / `checklist`), k repeated runs, resumable, budget-capped | Scripted model through the full harness reproduces baseline scores exactly on 36 tasks; transcripts stored. **A live-model smoke test is still yours to run.** |
+| **4** | Freeze lock, power planner, task-clustered bootstrap analysis, gated report | Analysis regenerates every number in the report byte-for-byte; every gate tested; **no live results exist yet** |
 | **5** | Failure taxonomy from transcripts, one-page report, reproducibility check from a fresh clone | Someone else reproduces the headline table |
 | Stretch | Overfitting, confounding, regime shift families | Only if Phases 0-5 are done |
 
