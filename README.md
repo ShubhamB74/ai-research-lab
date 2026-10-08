@@ -86,7 +86,7 @@ flowchart LR
 
 ```bash
 pip install -e ".[dev]"
-make test         # 113 tests: schema, grader (+mutation tests), 3 generators x every cell, runner, sandbox, harness, statistics, analysis, benchmark validation
+make test         # 134 tests: schema, grader (+mutation tests), 3 generators x every cell, runner, sandbox, harness, statistics, analysis, taxonomy tooling, reproducibility
 make generate     # 36 seeds x 2 variants x 3 families = 216 tasks (~170 MB; use --n 18 for lighter) -> ./tasks/public + ./tasks/private
 make baselines    # reference agents -> scorecard
 make selftest     # scripted model through the full LLM harness (no API key)
@@ -267,19 +267,32 @@ byte-for-byte reproducible; a hand-typed number in the report is rejected; and t
 What is NOT established: any result about real LLMs. No live experiment has been run. The reports used in tests are
 generated from synthetic scores with planted rates and must never be presented as findings.
 
+## Phase 5: taxonomy tooling, one-pager, reproducibility
+
+| Piece | What it does |
+|---|---|
+| `behavior.py` | Per run: did the agent's code look at the cue that exposes the flaw, and did it flag it? Diagnoses: detected / saw_not_flagged / never_looked / flagged_without_looking. The cue detector is a keyword heuristic, tested on labelled code snippets and meant to be audited by hand. |
+| `coding.py` | Stratified sampling of failures with inverse-probability weights, readable transcripts, blank coding sheet, per-code Cohen's kappa between coders, detector-vs-human validity, weighted code prevalence with task-clustered intervals. Seed codes are a-priori hypotheses; the taxonomy comes from reading transcripts. |
+| `onepager.py` | One-page summary. Computed numbers come from the results files; the author's interpretation is checked so every number in it exists in those files; length is capped. |
+| `repro.py` | Task-set manifest, task regeneration check, regrade of every raw submission against the answer keys, byte-for-byte analysis reproduction. |
+
+Workflow in `docs/CODING_GUIDE.md`. **No taxonomy exists yet**: it requires real transcripts. Tests use scripted agents and
+synthetic scores only. numpy's random streams are not guaranteed across major versions, so publish the generated task set
+with its manifest rather than relying on regeneration.
+
 ## Roadmap (build phase by phase; each phase has an exit test)
 
 | Phase | Deliverable | Exit criterion |
 |---|---|---|
-| **0** | Skeleton, schema, grader, leakage generator, baselines, tests | Oracle=100%, naive fooled, always-flag 100% false alarms |
-| **1** | 3 leakage mechanisms x 3 difficulties, calibrated ground truth, grader mutation + invariance tests, runner robustness tests | All 9 cells solved by `heuristic_careful`; clean twins verified exact; ladder separates `sanity_check` (recall 1.00 / 0.17 / 0.00) |
-| **2** | `survivorship.py` and `multiple_testing.py`, 2 mechanisms x 3 difficulties each, schema-based reference solvers (`analysis.py`) | `heuristic_careful` solves all 21 cells with 0 false alarms; oracle 100%; always-flag 100% false alarms; 57 tests |
-| **3** | LLM agent harness: sandboxed Python tool, transcript capture, prompt conditions (`none` / `generic_hint` / `checklist`), k repeated runs, resumable, budget-capped | Scripted model through the full harness reproduces baseline scores exactly on 36 tasks; transcripts stored. **A live-model smoke test is still yours to run.** |
-| **4** | Freeze lock, power planner, task-clustered bootstrap analysis, gated report | Analysis regenerates every number in the report byte-for-byte; every gate tested; **no live results exist yet** |
-| **5** | Failure taxonomy from transcripts, one-page report, reproducibility check from a fresh clone | Someone else reproduces the headline table |
+| **0 (done)** | Skeleton, schema, grader, leakage generator, baselines, tests | Oracle=100%, naive fooled, always-flag 100% false alarms |
+| **1 (done)** | 3 leakage mechanisms x 3 difficulties, calibrated ground truth, grader mutation + invariance tests, runner robustness tests | All 9 cells solved by `heuristic_careful`; clean twins verified exact; ladder separates `sanity_check` (recall 1.00 / 0.17 / 0.00) |
+| **2 (done)** | `survivorship.py` and `multiple_testing.py`, 2 mechanisms x 3 difficulties each, schema-based reference solvers (`analysis.py`) | `heuristic_careful` solves all 21 cells with 0 false alarms; oracle 100%; always-flag 100% false alarms; 57 tests |
+| **3 (done, offline-verified)** | LLM agent harness: sandboxed Python tool, transcript capture, prompt conditions (`none` / `generic_hint` / `checklist`), k repeated runs, resumable, budget-capped | Scripted model through the full harness reproduces baseline scores exactly on 36 tasks; transcripts stored. **A live-model smoke test is still yours to run.** |
+| **4 (tooling done; live runs are yours)** | Freeze lock, power planner, task-clustered bootstrap analysis, gated report | Analysis regenerates every number in the report byte-for-byte; every gate tested; **no live results exist yet** |
+| **5 (tooling done; taxonomy needs real transcripts)** | Behaviour diagnosis, coding pipeline, one-pager, reproducibility checks | Tooling tested offline; someone else reproduces the headline table via `repro-check` once live results exist |
 | Stretch | Overfitting, confounding, regime shift families | Only if Phases 0-5 are done |
 
-## Known limitations
+## Known limitations (state these in any write-up)
 
 - Synthetic data: agents may recognise toy structure, and real traps are messier. Mitigation
   planned: finance-flavoured realism and, later, a small real-data anchor set.
