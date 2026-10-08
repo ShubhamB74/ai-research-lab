@@ -15,6 +15,14 @@ Add newest entries at the top. Copy the template.
 
 ---
 
+### EXP-008 | (date) | Phase 5 tooling: what can be measured without inventing a taxonomy?
+- **Design decisions:** (1) the failure taxonomy is not written in advance; only a-priori SEED codes plus open coding (`NEW:` codes) are provided. (2) A deterministic layer separates "did not look at the cue" from "looked but did not flag" using a keyword heuristic over the agent's code; its error must be audited against human labels, so the audit column and `detector_validity` exist. (3) Failures are oversampled for coding, so prevalence uses inverse-probability weights; a test shows weighted and raw shares differ. (4) The one-pager verifies the author's own prose: any number not in the results files is rejected.
+- **Verified offline (134 tests):** detector on labelled positive and negative snippets for each family; all diagnosis classes; sampler weights sum to stratum sizes; kappa values; weighted prevalence equals the hand computation; manifest, regrade and analysis reproduction each detect tampering; pipeline runs on real harness transcripts.
+- **Known limits:** the cue detector is untested against real agent code; task regeneration may differ across numpy versions (publish the generated tasks); no live transcripts exist, so no failure modes have been identified yet.
+- **Next:** run the live experiment, then follow docs/CODING_GUIDE.md.
+
+---
+
 ### EXP-007 | (date) | Phase 4 tooling: can the pre-registered rules reach a verdict at a feasible size, and does the pipeline guard itself?
 - **Predicted (before running):** with 54 pairs and 3 reps, assumed recall 0.2 (baseline) vs 0.7 (checklist), H1 and H2 would both be supported most of the time; a null checklist effect would almost never be "supported".
 - **Result (simulation, 60 runs per scenario):** H2 supported 83 percent when the effect is real, 0 percent when null. H1 supported only 55 percent: the clean-accuracy clause (lower bound above 0.9 at the Bonferroni level) is the bottleneck, not the recall clause.

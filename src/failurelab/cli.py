@@ -1,4 +1,4 @@
-"""CLI:  python -m failurelab.cli generate | baselines | selftest | llm-run | freeze | analyze | review | power"""
+"""CLI:  python -m failurelab.cli generate | baselines | selftest | llm-run | freeze | analyze | review | power | behavior | coding-sheet | agreement | taxonomy | onepager | manifest | repro-check"""
 from __future__ import annotations
 
 import argparse
@@ -135,6 +135,97 @@ def cmd_power(args: argparse.Namespace) -> None:
         print(f"  {h}: " + ", ".join(f"{k}={v:.2f}" for k, v in t.items() if k != "not_evaluable"))
 
 
+def _scores_with_pairs(tasks: str, runs):
+    from .study import attach_pairs, load_runs
+    return attach_pairs(load_runs(runs), Path(tasks) / "private")
+
+
+def cmd_behavior(args: argparse.Namespace) -> None:
+    from .behavior import behavior_table, summarize
+    from .inference import Study
+    df = _scores_with_pairs(args.tasks, args.runs)
+    beh = behavior_table(df, Path(args.tasks) / "private")
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    beh.drop(columns=[]).to_csv(out / "behavior.csv", index=False)
+    summ = summarize(beh, Study(beh.pair_id, B=args.bootstrap_B, seed=args.seed))
+    (out / "behavior.json").write_text(json.dumps(summ, indent=2, sort_keys=True))
+    print(f"wrote {out}/behavior.csv and behavior.json ({len(beh)} runs)")
+    for m, conds in summ.items():
+        for c, e in conds.items():
+            o = e["overall"]
+            print(f"  {m} | {c}: looked {o['looked_rate']['point']:.2f}, flag|looked {o['flag_given_looked']['point']:.2f}, "
+                  f"flag|not looked {o['flag_given_not_looked']['point']:.2f}")
+    print("NOTE: 'looked' is a keyword heuristic; audit a sample by hand (see docs/CODING_GUIDE.md).")
+
+
+def cmd_coding_sheet(args: argparse.Namespace) -> None:
+    from .coding import sample_for_coding, write_coding_sheet
+    df = _scores_with_pairs(args.tasks, args.runs)
+    sample = sample_for_coding(df, args.per_stratum, args.seed)
+    path = write_coding_sheet(sample, Path(args.tasks) / "private", args.out)
+    print(f"{len(sample)} runs sampled from {sample.stratum.nunique()} strata -> {path}")
+
+
+def cmd_agreement(args: argparse.Namespace) -> None:
+    import pandas as pd
+    from .coding import kappa_table, validate_sheet
+    a, b = pd.read_csv(args.sheets[0]), pd.read_csv(args.sheets[1])
+    for name, sh in (("A", a), ("B", b)):
+        for prob in validate_sheet(sh):
+            print(f"coder {name}: {prob}")
+    print(kappa_table(a, b).to_string(index=False))
+    print("\nReconcile disagreements, write the final codes into one sheet, then run `taxonomy`.")
+
+
+def cmd_taxonomy(args: argparse.Namespace) -> None:
+    import pandas as pd
+    from .coding import prevalence_table, validate_sheet
+    sheet = pd.read_csv(args.sheet)
+    for prob in validate_sheet(sheet):
+        print("WARNING " + prob)
+    tab = prevalence_table(sheet, B=args.bootstrap_B, seed=args.seed)
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "taxonomy.json").write_text(json.dumps(tab.to_dict(orient="records"), indent=2))
+    print(tab.to_string(index=False))
+
+
+def cmd_onepager(args: argparse.Namespace) -> None:
+    from .onepager import OnePagerError, build_onepager
+    rd = Path(args.report)
+    try:
+        text = build_onepager(rd, rd / "behavior.json", rd / "taxonomy.json", args.interpretation or rd / "interpretation.md",
+                              args.final, args.models, args.baseline)
+    except OnePagerError as exc:
+        raise SystemExit(f"one-pager stopped: {exc}")
+    (rd / "one_pager.md").write_text(text)
+    print(f"wrote {rd}/one_pager.md ({len(text.split())} words)")
+
+
+def cmd_manifest(args: argparse.Namespace) -> None:
+    from .repro import write_manifest
+    rec = write_manifest(Path(args.tasks), args.out)
+    print(f"manifest: {rec['n_files']} files (numpy {rec['numpy']}, pandas {rec['pandas']}) -> {args.out}")
+    print("Commit it with the pre-registration lock.")
+
+
+def cmd_repro(args: argparse.Namespace) -> None:
+    from .prereg import load
+    from .repro import repro_check
+    plan = load(args.prereg)
+    kw = dict(tasks_dir=args.tasks, run_dirs=args.runs, prereg_path=args.prereg, doc_path=args.doc, lock_path=args.lock,
+              exclusions_path=args.exclusions, allow_incomplete=args.allow_incomplete, allow_unreviewed=args.allow_unreviewed)
+    results = repro_check(args.tasks, args.runs, args.report, args.manifest, plan, kw)
+    failed = False
+    for name, problems in results.items():
+        print(f"{'PASS' if not problems else 'FAIL'}  {name}")
+        for p in problems[:10]:
+            print("      " + p)
+        failed |= bool(problems)
+    raise SystemExit(1 if failed else 0)
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="failurelab")
     sub = p.add_subparsers(required=True)
@@ -204,6 +295,34 @@ def main() -> None:
     pw.add_argument("--sims", type=int, default=200)
     pw.add_argument("--seed", type=int, default=0)
     pw.set_defaults(fn=cmd_power)
+    bh = sub.add_parser("behavior", help="did each run's code look at the cue, and did looking lead to a flag?")
+    bh.add_argument("--tasks", default="tasks"); bh.add_argument("--runs", nargs="+", required=True)
+    bh.add_argument("--out", default="report"); bh.add_argument("--bootstrap-B", type=int, default=5000)
+    bh.add_argument("--seed", type=int, default=12345); bh.set_defaults(fn=cmd_behavior)
+    cs = sub.add_parser("coding-sheet", help="stratified sample of runs + readable transcripts + blank coding sheet")
+    cs.add_argument("--tasks", default="tasks"); cs.add_argument("--runs", nargs="+", required=True)
+    cs.add_argument("--out", default="coding"); cs.add_argument("--per-stratum", type=int, default=3)
+    cs.add_argument("--seed", type=int, default=0); cs.set_defaults(fn=cmd_coding_sheet)
+    ag = sub.add_parser("agreement", help="per-code agreement between two coders' sheets")
+    ag.add_argument("sheets", nargs=2); ag.set_defaults(fn=cmd_agreement)
+    tx = sub.add_parser("taxonomy", help="weighted prevalence of codes from the final adjudicated sheet")
+    tx.add_argument("--sheet", required=True); tx.add_argument("--out", default="report")
+    tx.add_argument("--bootstrap-B", type=int, default=5000); tx.add_argument("--seed", type=int, default=12345)
+    tx.set_defaults(fn=cmd_taxonomy)
+    op = sub.add_parser("onepager", help="one-page summary; numbers computed, interpretation verified")
+    op.add_argument("--report", default="report"); op.add_argument("--interpretation", default=None)
+    op.add_argument("--models", nargs="*", default=None); op.add_argument("--baseline", default="none")
+    op.add_argument("--final", action="store_true"); op.set_defaults(fn=cmd_onepager)
+    mf = sub.add_parser("manifest", help="hash the generated task set")
+    mf.add_argument("--tasks", default="tasks"); mf.add_argument("--out", default="experiments/task_manifest.json")
+    mf.set_defaults(fn=cmd_manifest)
+    rc = sub.add_parser("repro-check", help="regenerate tasks, regrade raw submissions, re-run the analysis; compare to stored files")
+    rc.add_argument("--tasks", default="tasks"); rc.add_argument("--runs", nargs="+", required=True)
+    rc.add_argument("--report", default="report"); rc.add_argument("--manifest", default="experiments/task_manifest.json")
+    rc.add_argument("--prereg", default="docs/prereg.json"); rc.add_argument("--doc", default="docs/PREREGISTRATION.md")
+    rc.add_argument("--lock", default="experiments/prereg.lock"); rc.add_argument("--exclusions", default="experiments/exclusions.json")
+    rc.add_argument("--allow-incomplete", action="store_true"); rc.add_argument("--allow-unreviewed", action="store_true")
+    rc.set_defaults(fn=cmd_repro)
     args = p.parse_args()
     args.fn(args)
 

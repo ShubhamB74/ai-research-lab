@@ -112,3 +112,10 @@ A NON-CONFIRMATORY banner lists the reasons; report it as such, do not hide it. 
 - Do not change thresholds after seeing data. Anything not in `prereg.json` is exploratory; say so.
 - Report `generic_hint` vs `none` and any per-cell findings as exploratory.
 - Keep the failure transcripts: Phase 5 builds the failure taxonomy from them.
+
+---
+
+# Phase 5 protocol: taxonomy, one-pager, reproducibility
+After `analyze` (step 11), follow `docs/CODING_GUIDE.md`: `behavior` -> `coding-sheet` -> two independent coders ->
+`agreement` -> `taxonomy` -> write `report/interpretation.md` -> `onepager --final` -> `manifest` (at freeze time) and
+`repro-check`. Treat everything in this phase as exploratory unless it is a pre-registered test from step 11.
