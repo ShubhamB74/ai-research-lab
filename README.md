@@ -280,7 +280,7 @@ Workflow in `docs/CODING_GUIDE.md`. **No taxonomy exists yet**: it requires real
 synthetic scores only. numpy's random streams are not guaranteed across major versions, so publish the generated task set
 with its manifest rather than relying on regeneration.
 
-## Roadmap (build phase by phase; each phase has an exit test)
+## Roadmap
 
 | Phase | Deliverable | Exit criterion |
 |---|---|---|
@@ -292,7 +292,7 @@ with its manifest rather than relying on regeneration.
 | **5 (tooling done; taxonomy needs real transcripts)** | Behaviour diagnosis, coding pipeline, one-pager, reproducibility checks | Tooling tested offline; someone else reproduces the headline table via `repro-check` once live results exist |
 | Stretch | Overfitting, confounding, regime shift families | Only if Phases 0-5 are done |
 
-## Known limitations (state these in any write-up)
+## Known limitations
 
 - Synthetic data: agents may recognise toy structure, and real traps are messier. Mitigation
   planned: finance-flavoured realism and, later, a small real-data anchor set.
