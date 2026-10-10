@@ -45,7 +45,7 @@ flowchart LR
 | `grader.py` | Deterministic scoring against the answer key. |
 | `scorecard.py` | Aggregates into the reliability scorecard with Wilson 95% intervals. |
 
-## Design rules (these are what make the benchmark credible)
+## Design rules
 
 1. **Known ground truth.** Every task is synthetic with a known true effect, so correctness is
    checked by comparison, not opinion.
